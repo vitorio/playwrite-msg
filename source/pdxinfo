@@ -1,8 +1,8 @@
-name=Playwrite
-author=Tom Granger
+name=Playwrite-msg
+author=Tom Granger with Vitorio Miliano
 description=Experimental word processor for Playdate with keyboard adapter.
-bundleID=com.t0m.playwrite
-version=1.0
+bundleID=com.vitorio.playwrite-msg
+version=1.1
 buildNumber=1
 imagePath=images/card.png
 launchSoundPath=
