@@ -2,7 +2,9 @@ import "CoreLibs/object"
 import "CoreLibs/graphics"
 import "CoreLibs/sprites"
 import "CoreLibs/timer"
+import "require"
 
+local base64 = require'base64'
 local pd<const> = playdate
 local gfx<const> = pd.graphics
 
@@ -455,31 +457,46 @@ function insertLineBreak()
     animateLineScroll()
 end
 
-local crankin = 0
-function pd.cranked(change, _)
-    print("crank change ".. change)
-    if (math.abs(change) < keyboardInputAngleOffset) then
-        crankin += change
-        if(math.abs(crankin) > 25) then
-            shiftCursorVert(crankin > 0)
-            crankin = 0
+-- https://devforum.play.date/t/msg-command-sim-device-differences-control-codes-dropped-max-length/16443/2
+-- ⬑ not all characters can be transmitted in the clear, valid list is:
+-- !"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~
+-- plus space.
+--
+-- https://devforum.play.date/t/pewpew-python-games-on-playdate-wip/17379
+-- ⮤ if we're receiving a single printable character, that's a single valid keypress
+-- if we're receiving multiple characters that's a valid number 32-255 inclusive, it's a char (duplicating the old crank encoder)
+-- if we're receiving multiple characters starting with an exclamation point, base64 decode it
+-- the base64 padding is optional when sending, but necessary for decoding
+function pd.serialMessageReceived(message)
+    if #message == 1 and string.find(' !"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~', message, 1, true) then
+        print(message)
+        insertChar(message)
+        readyForNextInput()
+    elseif (#message == 2 or #message == 3) and tonumber(message) and tonumber(message) >= 32 and tonumber(message) <= 255 then
+        print('value '..message)
+        local char = string.char(message)
+        print(char)
+        insertChar(char)
+        readyForNextInput()
+    elseif string.sub(message, 1, 1) == "!" then
+        print('value '..message, (#message - 1) % 4)
+        local encoded
+        if (#message - 1) % 4 == 1 then
+            encoded = string.sub(message, 2) .. "==="
+        elseif (#message - 1) % 4 == 2 then
+            encoded = string.sub(message, 2) .. "=="
+        elseif (#message - 1) % 4 == 3 then
+            encoded = string.sub(message, 2) .. "="
+        else
+            encoded = string.sub(message, 2)
         end
-        return
+        decoded = base64.decode(encoded)
+        print(decoded)
+        insertChar(decoded)
+        readyForNextInput()
+    else
+        print('invalid value '..message)
     end
-
-    -- values above 180 transmitted via serial are automatically converted to a negative angle (360 - value)
-    -- so we make the value positive again.
-    if change < 0 then
-        change += 360
-    end
-
-    local value = math.min(math.max(32, math.floor(change - keyboardInputAngleOffset + 0.5)), 255)
-    print('value '..value)
-
-    local char = string.char(value)
-    print(char)
-    insertChar(char)
-    readyForNextInput()
 end
 
 function pd.update()
